@@ -2,9 +2,9 @@
 
 ScreenMgr:
 	transition: FadeTransition()
-	MainMenu:
-	GameScreen:
-	
+	GameScreen
+	MainMenu
+
 <MainMenu>:
 	name: 'mainmenu'
 	BoxLayout:
@@ -13,8 +13,9 @@ ScreenMgr:
 			source: 'assets/img/logo.png'
 			size_hint_y: 30
 		BoxLayout:
+			spacing: 100
 			size_hint_y: 70
-			padding: [dp(75), dp(10)]
+			padding: [dp(200), dp(10)]
 			orientation: 'vertical'
 			Button:
 				text: 'Play'
