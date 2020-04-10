@@ -41,10 +41,25 @@ def getNextId():
 	curid += 1
 	return curid
 
-class myBox(Rectangle):
+class Entity():
+	def __init__(self, **kwargs):
+		self.id = getNextId()
+		self.pos = kwargs['pos']
+		self.size = kwargs['size']
+	def update(self, dt):
+		pass
+	def render(self, dt):
+		pass
+
+class myBox(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
-		self.id = getNextId()
+	def update(self, dt):
+		xp, yp = self.pos
+		self.pos = (xp, yp + self.id * 50 * dt)
+
+	def render(self, dt):
+		return Rectangle(pos=self.pos, size=self.size)
 
 class GameCanvas(FocusBehavior, Widget):
 	gameobjects = []
@@ -66,13 +81,12 @@ class GameCanvas(FocusBehavior, Widget):
 		
 		# update
 		for obj in self.gameobjects:
-			xp, yp = obj.pos
-			obj.pos = (xp, yp + obj.id * 50 * dt)
+			obj.update(dt)
 		
 		# render
 		self.canvas.clear() # Clear
 		for obj in self.gameobjects:
-			self.canvas.add(obj) 
+			self.canvas.add(obj.render(dt)) 
 
 class MainMenu(Screen):
 	pass
