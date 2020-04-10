@@ -1,0 +1,36 @@
+#: import FadeTransition kivy.uix.screenmanager.FadeTransition
+
+ScreenMgr:
+	transition: FadeTransition()
+	MainMenu:
+	GameScreen:
+	
+<MainMenu>:
+	name: 'mainmenu'
+	BoxLayout:
+		orientation: 'vertical'
+		Image:
+			source: 'assets/img/logo.png'
+			size_hint_y: 30
+		BoxLayout:
+			size_hint_y: 70
+			padding: [dp(75), dp(10)]
+			orientation: 'vertical'
+			Button:
+				text: 'Play'
+				font_size: '50sp'
+				on_release: app.root.current = 'gamescreen'
+				size_hint_y: 40
+			Button:
+				text: 'Quit'
+				font_size: '50sp'
+				on_press: app.stop()
+				size_hint_y: 40
+			Label:
+				text: 'Ragul Balaji 2020 (C) All Rights Reserved'
+				font_size: sp(15)
+				size_hint_y: 20
+
+<GameScreen>:
+	name: 'gamescreen'
+	GameCanvas
