@@ -17,6 +17,7 @@ GAME_WIDTH = 1200
 GAME_HEIGHT = 900
 GAME_DIM = (GAME_WIDTH, GAME_HEIGHT)
 GAME_OBJS = []
+PLAYER_OBJ = None
 KEYS_ACTIVE = set()
 TOUCH_ACTIVE = None
 
@@ -85,14 +86,26 @@ class myBox(Entity):
 class Bullet(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
+		self.parentid = kwargs['parentid']
 		self.startpos = self.pos[:]
 		self.size = Vector(dp(10), dp(10))
 		self.range = dp(GAME_HEIGHT/2)
 		snd_shoot.play()
+	def die(self):
+		GAME_OBJS.remove(self)
 	def update(self, dt):
 		self.pos += self.velocity
 		if self.pos.distance(self.startpos) > self.range:
-			GAME_OBJS.remove(self)
+			self.die()
+			return
+		else:
+			for obj in GAME_OBJS:
+				if obj.id != self.id and obj.id != self.parentid and self.pos.distance(obj.pos) < dp(max(obj.size)/4):
+					if hasattr(obj, 'hurt'):
+						obj.hurt(1)
+						snd_hit.play()
+					self.die()
+					return
 	def render(self, canvas):
 		with canvas:
 			PushMatrix()
@@ -103,38 +116,39 @@ class Bullet(Entity):
 class EnemyTank(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
+		self.health = 100
 		self.speed = dp(100)
 		self.rotspd = 120
+		self.turretspd = 30
 		self.size = Vector(dp(46), dp(100))
 		self.turretangle = 0
 		self.turretsize = Vector(dp(60), dp(15))
 		self.turretcorrection = Vector(0, dp(7.5))
 		self.capsize = Vector(dp(44), dp(44))
 		self.nextshottime = 0
-		self.reloadtime = 1.0 / 2.5
+		self.reloadtime = 1.0 / 2
 	def update(self, dt):
-		global KEYS_ACTIVE, TOUCH_ACTIVE
-		if 'a' in KEYS_ACTIVE: self.rot += self.rotspd * dt
-		if 'd' in KEYS_ACTIVE: self.rot -= self.rotspd * dt
-		
+		global PLAYER_OBJ
+
+		self.playerheading = -Vector(1,0).angle(Vector(PLAYER_OBJ.pos)-self.pos)
+
+		self.turretangle += dt * self.turretspd * 1 if Vector(1,0).rotate(self.turretangle).angle(Vector(PLAYER_OBJ.pos)-self.pos) < 0 else -1
+
 		movedir = Vector(0, self.speed).rotate(self.rot)
-		if 'w' in KEYS_ACTIVE: self.velocity = movedir
-		if 's' in KEYS_ACTIVE: self.velocity = -0.5 * movedir
+		if PLAYER_OBJ.pos.distance(self.pos) > 1: #max(self.size) * 6:
+			if abs(self.playerheading - self.rot) < 10:
+				self.velocity = movedir
 
-		if 'left' in KEYS_ACTIVE: self.turretangle += self.rotspd * dt
-		if 'right' in KEYS_ACTIVE: self.turretangle -= self.rotspd * dt
-
-		if TOUCH_ACTIVE != None: self.turretangle = -Vector(1,0).angle(Vector(TOUCH_ACTIVE.pos)-self.pos)
-
-		if (TOUCH_ACTIVE != None or 'up' in KEYS_ACTIVE) and time.time() > self.nextshottime:
-			self.nextshottime = time.time() + self.reloadtime
+		if time.time() > self.nextshottime:
+			self.nextshottime = time.time() + self.reloadtime + random.random() * 2
 			bulletvel = Vector(dp(10),0).rotate(self.turretangle)
-			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel))
-			self.velocity -= 10 * bulletvel # knockback
+			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel, parentid=self.id))
+			#self.velocity -= 10 * bulletvel # knockback
 
 		self.pos += self.velocity * dt
 		self.velocity *= 0.9
 		self.lowerleftpos = self.pos - self.size / 2
+		#self.turretangle += random.randint(-1,1) # random error
 	def render(self, canvas):
 		with canvas:
 			PushMatrix()
@@ -148,13 +162,19 @@ class EnemyTank(Entity):
 			Rotate(origin=self.pos, angle=self.turretangle)
 			Rectangle(pos=self.pos-self.turretcorrection, size=self.turretsize)
 			PopMatrix()
+			Color(*CLR_WHI)
+			healthstr = str(self.health)
+			texLabel(healthstr, 25, (self.pos + Vector(-15*len(healthstr),-25)) / dp(1), CLR_WHI)
+	def hurt(self, dmg = 1):
+		self.health -= dmg
 
 class PlayerTank(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
-		self.health = 10
+		self.health = 100
 		self.speed = dp(100)
 		self.rotspd = 120
+		self.turretspd = 60
 		self.size = Vector(dp(46), dp(100))
 		self.turretangle = 0
 		self.turretsize = Vector(dp(60), dp(15))
@@ -171,15 +191,15 @@ class PlayerTank(Entity):
 		if 'w' in KEYS_ACTIVE: self.velocity = movedir
 		if 's' in KEYS_ACTIVE: self.velocity = -0.5 * movedir
 
-		if 'left' in KEYS_ACTIVE: self.turretangle += self.rotspd * dt
-		if 'right' in KEYS_ACTIVE: self.turretangle -= self.rotspd * dt
+		if 'left' in KEYS_ACTIVE: self.turretangle += self.turretspd * dt
+		if 'right' in KEYS_ACTIVE: self.turretangle -= self.turretspd * dt
 
 		if TOUCH_ACTIVE != None: self.turretangle = -Vector(1,0).angle(Vector(TOUCH_ACTIVE.pos)-self.pos)
 
 		if (TOUCH_ACTIVE != None or 'up' in KEYS_ACTIVE) and time.time() > self.nextshottime:
 			self.nextshottime = time.time() + self.reloadtime
 			bulletvel = Vector(dp(10),0).rotate(self.turretangle)
-			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel))
+			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel, parentid=self.id))
 			self.velocity -= 10 * bulletvel # knockback
 
 		self.pos += self.velocity * dt
@@ -200,8 +220,13 @@ class PlayerTank(Entity):
 			PopMatrix()
 			PushMatrix()
 			Color(1,1,1,1)
-			for i in range(self.health): Rectangle(pos=(100+i*dp(50), 10), size=(dp(50),dp(50)), source='assets/img/heart.png')
+			Rectangle(pos=(dp(10),dp(10)), size=(dp(50),dp(50)), source='assets/img/heart.png')
+			Rectangle(pos=(dp(65),dp(10)), size=(dp(500),dp(50)))
+			Color(*CLR_RED) if self.health < 50 else Color(*CLR_GRN)
+			Rectangle(pos=(dp(65),dp(10)), size=(dp(5*self.health),dp(50)))
 			PopMatrix()
+	def hurt(self, dmg = 1):
+		self.health -= dmg
 
 class GameCanvas(Widget):
 	def __init__(self, **kwargs):
@@ -214,7 +239,9 @@ class GameCanvas(Widget):
 		self.keyboard.bind(on_key_up=self.key_up)
 
 		# init objs
-		GAME_OBJS.append(PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2))))
+		global PLAYER_OBJ
+		PLAYER_OBJ = PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)))
+		GAME_OBJS.append(PLAYER_OBJ)
 
 		for i in range(random.randint(2, 5)):
 			GAME_OBJS.append(EnemyTank(pos=(dp(random.randint(0,GAME_WIDTH/2)), dp(random.randint(0,GAME_WIDTH/2)))))
