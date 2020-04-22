@@ -112,17 +112,18 @@ class PlayerTank(Entity):
 		if 'w' in keys_active: self.velocity = movedir
 		if 's' in keys_active: self.velocity = -movedir
 
-		self.pos += self.velocity * dt
-		self.velocity *= 0.9
-
 		if touch != None:
 			touchpos = Vector(touch.pos)
 			self.turretangle = - self.rot - Vector(1,0).angle(touchpos-self.pos)
 			bulletangle = Vector(touchpos-self.pos).angle(Vector(1,0))
 			if time.time() > self.nextshottime:
 				self.nextshottime = time.time() + self.reloadtime
-				GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(bulletangle), velocity=Vector(dp(10),0).rotate(bulletangle)))
+				bulletvel = Vector(dp(10),0).rotate(bulletangle)
+				GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(bulletangle), velocity=bulletvel))
+				self.velocity -= 10 * bulletvel # knockback
 
+		self.pos += self.velocity * dt
+		self.velocity *= 0.9
 		self.lowerleftpos = self.pos - self.size / 2
 	def render(self, canvas):
 		with canvas:
