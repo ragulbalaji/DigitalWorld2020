@@ -4,6 +4,7 @@ ScreenMgr:
 	transition: FadeTransition()
 	MainMenu
 	GameScreen
+	HelpScreen
 
 <MainMenu>:
 	name: 'mainmenu'
@@ -13,7 +14,7 @@ ScreenMgr:
 			source: 'assets/img/logo.png'
 			size_hint_y: 30
 		BoxLayout:
-			spacing: dp(50)
+			spacing: dp(30)
 			size_hint_y: 70
 			padding: [dp(200), dp(10)]
 			orientation: 'vertical'
@@ -21,6 +22,11 @@ ScreenMgr:
 				text: 'Play'
 				font_size: '50sp'
 				on_release: app.root.current = 'gamescreen'
+				size_hint_y: 40
+			Button:
+				text: 'Controls & Help'
+				font_size: '50sp'
+				on_release: app.root.current = 'helpscreen'
 				size_hint_y: 40
 			Button:
 				text: 'Quit'
@@ -35,3 +41,17 @@ ScreenMgr:
 <GameScreen>:
 	name: 'gamescreen'
 	GameCanvas
+
+<HelpScreen>:
+	name: 'helpscreen'
+	FloatLayout:
+		Image:
+			source: 'assets/img/controls.png'
+			size_hint: 1, 1
+			allow_stretch: True
+			keep_ratio: True
+		Button:
+			text: 'Back to Menu'
+			font_size: '50sp'
+			on_release: app.root.current = 'mainmenu'
+			size_hint: 0.3, 0.1

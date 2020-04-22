@@ -10,6 +10,7 @@ from kivy.clock import Clock
 from kivy.graphics import *
 from kivy.metrics import *
 import time
+import random
 
 GAME_FPS = 1.0/60.0
 GAME_WIDTH = 1200
@@ -99,7 +100,7 @@ class Bullet(Entity):
 			Ellipse(pos=self.pos-self.size/2, size=self.size)
 			PopMatrix()
 
-class PlayerTank(Entity):
+class EnemyTank(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
 		self.speed = dp(100)
@@ -137,15 +138,69 @@ class PlayerTank(Entity):
 	def render(self, canvas):
 		with canvas:
 			PushMatrix()
-			Color(0.152, 0.439, 0, 1)
+			Color(1,1,1,1)
 			Rotate(origin=self.pos, angle=self.rot)
-			Rectangle(pos=self.lowerleftpos, size=self.size)
-			Color(*CLR_BLU)
+			Rectangle(pos=self.lowerleftpos, size=self.size, source='assets/img/tank.png')
 			PopMatrix()
 			PushMatrix()
+			Color(*CLR_RED)
 			Ellipse(pos=self.pos-self.capsize/2, size=self.capsize)
 			Rotate(origin=self.pos, angle=self.turretangle)
 			Rectangle(pos=self.pos-self.turretcorrection, size=self.turretsize)
+			PopMatrix()
+
+class PlayerTank(Entity):
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		self.health = 10
+		self.speed = dp(100)
+		self.rotspd = 120
+		self.size = Vector(dp(46), dp(100))
+		self.turretangle = 0
+		self.turretsize = Vector(dp(60), dp(15))
+		self.turretcorrection = Vector(0, dp(7.5))
+		self.capsize = Vector(dp(44), dp(44))
+		self.nextshottime = 0
+		self.reloadtime = 1.0 / 3
+	def update(self, dt):
+		global KEYS_ACTIVE, TOUCH_ACTIVE
+		if 'a' in KEYS_ACTIVE: self.rot += self.rotspd * dt
+		if 'd' in KEYS_ACTIVE: self.rot -= self.rotspd * dt
+		
+		movedir = Vector(0, self.speed).rotate(self.rot)
+		if 'w' in KEYS_ACTIVE: self.velocity = movedir
+		if 's' in KEYS_ACTIVE: self.velocity = -0.5 * movedir
+
+		if 'left' in KEYS_ACTIVE: self.turretangle += self.rotspd * dt
+		if 'right' in KEYS_ACTIVE: self.turretangle -= self.rotspd * dt
+
+		if TOUCH_ACTIVE != None: self.turretangle = -Vector(1,0).angle(Vector(TOUCH_ACTIVE.pos)-self.pos)
+
+		if (TOUCH_ACTIVE != None or 'up' in KEYS_ACTIVE) and time.time() > self.nextshottime:
+			self.nextshottime = time.time() + self.reloadtime
+			bulletvel = Vector(dp(10),0).rotate(self.turretangle)
+			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel))
+			self.velocity -= 10 * bulletvel # knockback
+
+		self.pos += self.velocity * dt
+		self.velocity *= 0.9
+		self.lowerleftpos = self.pos - self.size / 2
+	def render(self, canvas):
+		with canvas:
+			PushMatrix()
+			Color(1,1,1,1)
+			Rotate(origin=self.pos, angle=self.rot)
+			Rectangle(pos=self.lowerleftpos, size=self.size, source='assets/img/tank.png')
+			PopMatrix()
+			PushMatrix()
+			Color(*CLR_BLU)
+			Ellipse(pos=self.pos-self.capsize/2, size=self.capsize)
+			Rotate(origin=self.pos, angle=self.turretangle)
+			Rectangle(pos=self.pos-self.turretcorrection, size=self.turretsize)
+			PopMatrix()
+			PushMatrix()
+			Color(1,1,1,1)
+			for i in range(self.health): Rectangle(pos=(100+i*dp(50), 10), size=(dp(50),dp(50)), source='assets/img/heart.png')
 			PopMatrix()
 
 class GameCanvas(Widget):
@@ -161,8 +216,8 @@ class GameCanvas(Widget):
 		# init objs
 		GAME_OBJS.append(PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2))))
 
-		#for i in range(10):
-		#	GAME_OBJS.append(myBox(pos=(dp(i*50),dp(0)), size=(dp(50),dp(50))))
+		for i in range(random.randint(2, 5)):
+			GAME_OBJS.append(EnemyTank(pos=(dp(random.randint(0,GAME_WIDTH/2)), dp(random.randint(0,GAME_WIDTH/2)))))
 		
 		Clock.schedule_interval(self.tick, GAME_FPS)
 	
@@ -220,6 +275,8 @@ class GameCanvas(Widget):
 class MainMenu(Screen):
 	pass
 class GameScreen(Screen):
+	pass
+class HelpScreen(Screen):
 	pass
 class ScreenMgr(ScreenManager):
 	pass
