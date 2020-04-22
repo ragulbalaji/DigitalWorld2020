@@ -16,6 +16,8 @@ GAME_WIDTH = 1200
 GAME_HEIGHT = 900
 GAME_DIM = (GAME_WIDTH, GAME_HEIGHT)
 GAME_OBJS = []
+KEYS_ACTIVE = set()
+TOUCH_ACTIVE = None
 
 from kivy.config import Config
 Config.set('graphics', 'resizable', False) # Fixed Size
@@ -62,6 +64,8 @@ class Entity():
 		pass
 	def render(self, canvas):
 		with canvas:
+			PushMatrix()
+			PopMatrix()
 			pass
 
 class myBox(Entity):
@@ -83,14 +87,17 @@ class Bullet(Entity):
 		self.startpos = self.pos[:]
 		self.size = Vector(dp(10), dp(10))
 		self.range = dp(GAME_HEIGHT/2)
+		snd_shoot.play()
 	def update(self, dt):
 		self.pos += self.velocity
 		if self.pos.distance(self.startpos) > self.range:
 			GAME_OBJS.remove(self)
 	def render(self, canvas):
 		with canvas:
+			PushMatrix()
 			Color(1, 0.149, 0.463, 1)
 			Ellipse(pos=self.pos-self.size/2, size=self.size)
+			PopMatrix()
 
 class PlayerTank(Entity):
 	def __init__(self, **kwargs):
@@ -103,37 +110,43 @@ class PlayerTank(Entity):
 		self.turretcorrection = Vector(0, dp(7.5))
 		self.capsize = Vector(dp(44), dp(44))
 		self.nextshottime = 0
-		self.reloadtime = 1.0/5
-	def update(self, dt, keys_active, touch):
-		if 'a' in keys_active: self.rot += self.rotspd * dt
-		if 'd' in keys_active: self.rot -= self.rotspd * dt
+		self.reloadtime = 1.0 / 2.5
+	def update(self, dt):
+		global KEYS_ACTIVE, TOUCH_ACTIVE
+		if 'a' in KEYS_ACTIVE: self.rot += self.rotspd * dt
+		if 'd' in KEYS_ACTIVE: self.rot -= self.rotspd * dt
 		
 		movedir = Vector(0, self.speed).rotate(self.rot)
-		if 'w' in keys_active: self.velocity = movedir
-		if 's' in keys_active: self.velocity = -movedir
+		if 'w' in KEYS_ACTIVE: self.velocity = movedir
+		if 's' in KEYS_ACTIVE: self.velocity = -0.5 * movedir
 
-		if touch != None:
-			touchpos = Vector(touch.pos)
-			self.turretangle = - self.rot - Vector(1,0).angle(touchpos-self.pos)
-			bulletangle = Vector(touchpos-self.pos).angle(Vector(1,0))
-			if time.time() > self.nextshottime:
-				self.nextshottime = time.time() + self.reloadtime
-				bulletvel = Vector(dp(10),0).rotate(bulletangle)
-				GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(bulletangle), velocity=bulletvel))
-				self.velocity -= 10 * bulletvel # knockback
+		if 'left' in KEYS_ACTIVE: self.turretangle += self.rotspd * dt
+		if 'right' in KEYS_ACTIVE: self.turretangle -= self.rotspd * dt
+
+		if TOUCH_ACTIVE != None: self.turretangle = -Vector(1,0).angle(Vector(TOUCH_ACTIVE.pos)-self.pos)
+
+		if (TOUCH_ACTIVE != None or 'up' in KEYS_ACTIVE) and time.time() > self.nextshottime:
+			self.nextshottime = time.time() + self.reloadtime
+			bulletvel = Vector(dp(10),0).rotate(self.turretangle)
+			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel))
+			self.velocity -= 10 * bulletvel # knockback
 
 		self.pos += self.velocity * dt
 		self.velocity *= 0.9
 		self.lowerleftpos = self.pos - self.size / 2
 	def render(self, canvas):
 		with canvas:
+			PushMatrix()
 			Color(0.152, 0.439, 0, 1)
 			Rotate(origin=self.pos, angle=self.rot)
 			Rectangle(pos=self.lowerleftpos, size=self.size)
 			Color(*CLR_BLU)
+			PopMatrix()
+			PushMatrix()
 			Ellipse(pos=self.pos-self.capsize/2, size=self.capsize)
 			Rotate(origin=self.pos, angle=self.turretangle)
 			Rectangle(pos=self.pos-self.turretcorrection, size=self.turretsize)
+			PopMatrix()
 
 class GameCanvas(Widget):
 	def __init__(self, **kwargs):
@@ -146,7 +159,7 @@ class GameCanvas(Widget):
 		self.keyboard.bind(on_key_up=self.key_up)
 
 		# init objs
-		self.Player = PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)))
+		GAME_OBJS.append(PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2))))
 
 		#for i in range(10):
 		#	GAME_OBJS.append(myBox(pos=(dp(i*50),dp(0)), size=(dp(50),dp(50))))
@@ -154,15 +167,21 @@ class GameCanvas(Widget):
 		Clock.schedule_interval(self.tick, GAME_FPS)
 	
 	def on_touch_down(self, touch):
+		global TOUCH_ACTIVE
 		self.focused = True
 		self.touchpos = touch
+		TOUCH_ACTIVE = touch
 
 	def on_touch_move(self, touch):
+		global TOUCH_ACTIVE
 		self.focused = True
 		self.touchpos = touch
+		TOUCH_ACTIVE = touch
 
 	def on_touch_up(self, touch):
+		global TOUCH_ACTIVE
 		self.touchpos = None
+		TOUCH_ACTIVE = None
 
 	def on_kb_close(self):
 		print('Keyboard Failed')
@@ -170,13 +189,17 @@ class GameCanvas(Widget):
 		self.keyboard = None
 
 	def key_down(self, keyboard, keycode, text, modifiers):
+		global KEYS_ACTIVE
 		self.focused = True
 		code, word = keycode
 		self.keys_active.add(word)
+		KEYS_ACTIVE.add(word)
 
 	def key_up(self, keyboard, keycode):
+		global KEYS_ACTIVE
 		code, word = keycode
 		self.keys_active.remove(word)
+		KEYS_ACTIVE.remove(word)
 
 	def tick(self, dt):
 		if not self.focused:
@@ -188,13 +211,11 @@ class GameCanvas(Widget):
 		# update
 		for obj in GAME_OBJS:
 			obj.update(dt)
-		self.Player.update(dt, self.keys_active, self.touchpos)
-		
+
 		# render
 		self.canvas.clear() # Clear
 		for obj in GAME_OBJS:
 			obj.render(self.canvas)
-		self.Player.render(self.canvas)
 
 class MainMenu(Screen):
 	pass
@@ -207,7 +228,7 @@ class GameApp(App):
 	title = 'Tanks! | Ragul Balaji 2020 | Digital World 10.009'
 	def build(self):
 		print(self.title)
-		#snd_pickup.play()
+		snd_pickup.play()
 		return layouts
 
 gameapp = GameApp()
