@@ -20,6 +20,7 @@ GAME_OBJS = []
 PLAYER_OBJ = None
 KEYS_ACTIVE = set()
 TOUCH_ACTIVE = None
+BULLET_RANGE = dp(GAME_HEIGHT/2)
 
 from kivy.config import Config
 Config.set('graphics', 'resizable', False) # Fixed Size
@@ -42,6 +43,11 @@ def texLabel(msg, sz, pos, clr):
 	tlabel = CoreLabel(text=msg, font_size=sp(sz), color=clr)
 	tlabel.refresh()
 	return Rectangle(pos=(dp(pos[0]), dp(pos[1])), texture=tlabel.texture, size=list(tlabel.texture.size))
+
+def AddScoreToPlayer(pts, pos = None):
+	PLAYER_OBJ.score += pts
+	if pos != None:
+		pass
 
 curid = 0
 def getNextId():
@@ -135,7 +141,7 @@ class Bullet(Entity):
 		self.parentid = kwargs['parentid']
 		self.startpos = self.pos[:]
 		self.size = Vector(dp(10), dp(10))
-		self.range = dp(GAME_HEIGHT/2)
+		self.range = BULLET_RANGE
 		snd_shoot.play()
 	def die(self):
 		GAME_OBJS.remove(self)
@@ -163,21 +169,28 @@ class Bullet(Entity):
 class EnemyTank(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
-		self.maxhealth = 10
+		self.respawn()
+	def respawn(self):
+		self.maxhealth = random.randint(10,110)
 		self.health = self.maxhealth
-		self.speed = dp(100)
-		self.rotspd = 120
-		self.turretspd = 30
+		self.speed = dp(random.randint(50,120))
+		self.rotspd = random.randint(70,150)
+		self.turretspd = random.randint(1,30)
 		self.size = Vector(dp(46), dp(100))
 		self.turretangle = 0
 		self.turretsize = Vector(dp(60), dp(15))
 		self.turretcorrection = Vector(0, dp(7.5))
 		self.capsize = Vector(dp(44), dp(44))
 		self.nextshottime = 0
-		self.reloadtime = 1.0 / 2
+		self.reloadtime = 1.0 / (2 * random.random() + 0.5) 
+		self.safetydistance = max(self.size) * 0.1 * Vector(random.randint(15,35), random.randint(35,70))
+		self.pos = Vector(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)) + Vector(dp(max(GAME_WIDTH, GAME_HEIGHT)/1.5), 0).rotate(random.randint(-360, 360))
 	def die(self):
-		GAME_OBJS.remove(self)
+		#GAME_OBJS.remove(self)
+		AddScoreToPlayer(self.maxhealth, pos=self.pos)
 		GAME_OBJS.append(HealthPack(pos=self.pos, parentid=self.id))
+		# recycle enemies
+		self.respawn()
 	def update(self, dt):
 		global PLAYER_OBJ
 
@@ -186,14 +199,14 @@ class EnemyTank(Entity):
 
 		self.turretangle += dt * self.turretspd * (1 if Vector(1,0).rotate(self.turretangle).angle(Vector(PLAYER_OBJ.pos)-self.pos) < 0 else -1)
 
-		if distancetoplayer > max(self.size) * 5.5 or distancetoplayer < max(self.size) * 3.5:
+		if distancetoplayer < self.safetydistance[0] or distancetoplayer > self.safetydistance[1]:
 			toberotated = Vector(1,0).rotate(self.playerheading).angle(Vector(0,1).rotate(self.rot))
 			self.rot += self.rotspd * dt * (1 if toberotated > 0 else -1)
-			if abs(toberotated) < 3: # pointed in the correct direction
+			if abs(toberotated) < 30: # pointed in the correct direction
 				movedir = Vector(0, self.speed).rotate(self.rot)
-				self.velocity = movedir * (1 if distancetoplayer > max(self.size) * 6 else -0.5)
+				self.velocity = movedir * (1 if distancetoplayer > self.safetydistance[1] else -0.5)
 
-		if time.time() > self.nextshottime:
+		if time.time() > self.nextshottime and distancetoplayer < BULLET_RANGE:
 			self.nextshottime = time.time() + self.reloadtime + random.random() * 2
 			bulletvel = Vector(dp(10),0).rotate(self.turretangle)
 			GAME_OBJS.append(Bullet(pos=self.pos+Vector(dp(60), 0).rotate(self.turretangle), velocity=bulletvel, parentid=self.id))
@@ -226,6 +239,7 @@ class EnemyTank(Entity):
 class PlayerTank(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
+		self.score = 0
 		self.maxhealth = 100
 		self.health = self.maxhealth
 		self.speed = dp(100)
@@ -277,13 +291,14 @@ class PlayerTank(Entity):
 			PopMatrix()
 			PushMatrix()
 			Color(1,1,1,1)
+			Rectangle(pos=(dp(-10),dp(GAME_HEIGHT-60)), size=(dp(70),dp(70)), source='assets/img/medal.png')
 			Rectangle(pos=(dp(10),dp(10)), size=(dp(50),dp(50)), source='assets/img/heart.png')
 			Rectangle(pos=(dp(65),dp(10)), size=(dp(500),dp(50)))
 			Color(*CLR_RED) if self.health < 50 else Color(*CLR_GRN)
 			Rectangle(pos=(dp(65),dp(10)), size=(dp(5*self.health),dp(50)))
-			if self.health > self.maxhealth:
-				Color(*CLR_WHI)
-				texLabel('+'+str(int(self.health-self.maxhealth)), 45, (580, 10), CLR_WHI)
+			Color(*CLR_WHI)
+			texLabel(str(self.score), 45, (60, GAME_HEIGHT-50), CLR_WHI)
+			if self.health > self.maxhealth: texLabel('+'+str(int(self.health-self.maxhealth)), 45, (580, 10), CLR_WHI)
 			PopMatrix()
 	def hurt(self, dmg = 1):
 		self.health -= dmg
@@ -293,6 +308,7 @@ class GameCanvas(Widget):
 		super().__init__(**kwargs)
 		self.touchpos = None
 		self.focused = False
+		self.playing = False
 		self.keys_active = set()
 		self.keyboard = Window.request_keyboard(self.on_kb_close, self, 'text')
 		self.keyboard.bind(on_key_down=self.key_down)
@@ -303,8 +319,8 @@ class GameCanvas(Widget):
 		PLAYER_OBJ = PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)))
 		GAME_OBJS.append(PLAYER_OBJ)
 
-		for i in range(random.randint(1, 3)):
-			GAME_OBJS.append(EnemyTank(pos=(dp(random.randint(0,GAME_WIDTH/2)), dp(random.randint(0,GAME_WIDTH/2)))))
+		for i in range(random.randint(10, 30)):
+			GAME_OBJS.append(EnemyTank())
 		
 		Clock.schedule_interval(self.tick, GAME_FPS)
 	
@@ -342,11 +358,12 @@ class GameCanvas(Widget):
 		code, word = keycode
 		self.keys_active.remove(word)
 		KEYS_ACTIVE.remove(word)
+		if word == 'p': self.playing = not self.playing
 
 	def tick(self, dt):
-		if not self.focused:
+		if not self.playing:
 			self.canvas.clear() # Clear
-			self.canvas.add(texLabel("Click to focus", 100, (0,0), CLR_RED))
+			self.canvas.add(texLabel("Press [P] to Play", 100, (0,0), CLR_RED))
 			return
 		print('Tick', dt, len(GAME_OBJS))
 		
