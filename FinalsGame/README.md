@@ -10,7 +10,7 @@ Aim and shoot bullets at the RED enemy tanks to damage them, scavenge parts and 
 
 Defend the Motherland. How long can you last? 
 
-[Tanks Gameplay video with Intro Trailer]: https://www.youtube.com/watch?v=GyXKp_XBjiM	"Tanks Gameplay video with Intro Trailer"
+Watch [Tanks Gameplay with Intro Trailer - Youtube](https://www.youtube.com/watch?v=GyXKp_XBjiM)
 
 ## Game States
 
