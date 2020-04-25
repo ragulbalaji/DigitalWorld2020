@@ -2,5 +2,6 @@
 
 V S Ragul Balaji 2020 &copy; All Rights Reserved
 
-![gamescr](./assets/readme/gamescr.png)
+Game States
 
+![Game States](./assets/readme/states.png)
