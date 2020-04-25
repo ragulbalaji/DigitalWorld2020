@@ -4,6 +4,8 @@ V S Ragul Balaji 2020 &copy; All Rights Reserved
 
 ![tanks](./assets/readme/tanks.gif)
 
+[TOC]
+
 ## Game States
 
 ![Game States](./assets/readme/states.png)
