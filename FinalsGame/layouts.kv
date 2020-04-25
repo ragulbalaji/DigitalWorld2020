@@ -2,9 +2,11 @@
 
 ScreenMgr:
 	transition: FadeTransition()
-	GameScreen
 	MainMenu
+	GameScreen
+	GameOverScreen
 	HelpScreen
+	
 
 <MainMenu>:
 	name: 'mainmenu'
@@ -50,6 +52,21 @@ ScreenMgr:
 			size_hint: 1, 1
 			allow_stretch: True
 			keep_ratio: True
+		Button:
+			text: 'Back to Menu'
+			font_size: '50sp'
+			on_release: app.root.current = 'mainmenu'
+			size_hint: 0.3, 0.1
+
+<GameOverScreen>:
+	name: 'gameoverscreen'
+	FloatLayout:
+		Image:
+			source: 'assets/img/gameover.png'
+			size_hint: 1, 1
+			allow_stretch: True
+			keep_ratio: True
+		GameOverWidget
 		Button:
 			text: 'Back to Menu'
 			font_size: '50sp'

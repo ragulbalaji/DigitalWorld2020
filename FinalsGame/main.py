@@ -16,7 +16,11 @@ GAME_FPS = 1.0/60.0
 GAME_WIDTH = 1200
 GAME_HEIGHT = 900
 GAME_DIM = (GAME_WIDTH, GAME_HEIGHT)
+GAME_PLAYING = False
+NEW_GAME = True
 GAME_OBJS = []
+GAMECANVAS_OBJ = None
+GAMEOVER_OBJ = None
 PLAYER_OBJ = None
 KEYS_ACTIVE = set()
 TOUCH_ACTIVE = None
@@ -39,6 +43,12 @@ CLR_BLU = (0,0,1,1)
 CLR_WHI = (1,1,1,1)
 CLR_GRY = (0.5,0.5,0.5,1)
 CLR_BLK = (0,0,0,1)
+CLR_PYLW = (0.047,0.8,0.776, 1)
+CLR_PGRN = (0.325, 0.776, 0.392, 1)
+CLR_PINK = (0.757, 0.267, 0.608, 1)
+CLR_PCYN = (0.475, 0.518, 0.824, 1)
+PCLRS = [CLR_PYLW, CLR_PGRN, CLR_PINK, CLR_PCYN]
+
 def texLabel(msg, sz, pos, clr):
 	tlabel = CoreLabel(text=msg, font_size=sp(sz), color=clr)
 	tlabel.refresh()
@@ -46,8 +56,7 @@ def texLabel(msg, sz, pos, clr):
 
 def AddScoreToPlayer(pts, pos = None):
 	PLAYER_OBJ.score += pts
-	if pos != None:
-		pass
+	if pos != None: GAME_OBJS.append(ScoreFloater(pos=pos, score=pts))
 
 curid = 0
 def getNextId():
@@ -77,19 +86,6 @@ class Entity():
 			PopMatrix()
 			pass
 
-class myBox(Entity):
-	def __init__(self, **kwargs):
-		super().__init__(**kwargs)
-	def update(self, dt):
-		#self.velocity += self.accleration * dt
-		self.pos += self.velocity * dt
-		self.velocity *= 0.9
-		print(self.pos, self.velocity, self.accleration)
-	def render(self, canvas):
-		with canvas:
-			Color(*CLR_RED)
-			Rectangle(pos=self.pos, size=self.size)
-
 class HealthPack(Entity):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
@@ -110,6 +106,29 @@ class HealthPack(Entity):
 			PushMatrix()
 			Color(1,1,1,1)
 			Rectangle(pos=self.lowerleftpos, size=self.size, source='assets/img/health.png')
+			PopMatrix()
+
+class ScoreFloater(Entity):
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		self.text = '+' + str(kwargs['score'])
+		self.fontsize = sp(10)
+		self.maxsize = sp(random.randint(40, 50))
+		self.growthfactor = random.randint(5,15) / 10
+		self.color = random.choice(PCLRS)
+	def die(self):
+		GAME_OBJS.remove(self)
+	def update(self, dt):
+		if self.fontsize < self.maxsize:
+			self.fontsize += self.growthfactor
+		else:
+			self.die()
+			return
+	def render(self, canvas):
+		with canvas:
+			PushMatrix()
+			Color(*self.color)
+			texLabel(self.text, self.fontsize, self.pos / dp(1), CLR_WHI)
 			PopMatrix()
 
 class Explosion(Entity):
@@ -171,7 +190,7 @@ class EnemyTank(Entity):
 		super().__init__(**kwargs)
 		self.respawn()
 	def respawn(self):
-		self.maxhealth = random.randint(10,110)
+		self.maxhealth = random.randint(10, max(20, int(PLAYER_OBJ.score / 10)))
 		self.health = self.maxhealth
 		self.speed = dp(random.randint(50,120))
 		self.rotspd = random.randint(70,150)
@@ -187,8 +206,8 @@ class EnemyTank(Entity):
 		self.pos = Vector(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)) + Vector(dp(max(GAME_WIDTH, GAME_HEIGHT)/1.5), 0).rotate(random.randint(-360, 360))
 	def die(self):
 		#GAME_OBJS.remove(self)
-		AddScoreToPlayer(self.maxhealth, pos=self.pos)
 		GAME_OBJS.append(HealthPack(pos=self.pos, parentid=self.id))
+		AddScoreToPlayer(self.maxhealth, pos=self.pos)
 		# recycle enemies
 		self.respawn()
 	def update(self, dt):
@@ -302,28 +321,52 @@ class PlayerTank(Entity):
 			PopMatrix()
 	def hurt(self, dmg = 1):
 		self.health -= dmg
+		if self.health < 0:
+			global GAME_PLAYING, NEW_GAME
+			NEW_GAME = True
+			GAME_PLAYING = False
+			GAMEOVER_OBJ.update(self.score)
+			layouts.current = 'gameoverscreen'
+
+class GameOverWidget(Widget):
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		global GAMEOVER_OBJ
+		GAMEOVER_OBJ = self
+		self.update(0)
+	def update(self, score = 0):
+		self.text = "Your Score: %d" % score
+		self.canvas.clear()
+		with self.canvas:
+			Color(*CLR_PGRN)
+			texLabel(self.text, 100, ( (GAME_WIDTH - (50 * len(self.text))) / 2, 400), CLR_WHI)
 
 class GameCanvas(Widget):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
 		self.touchpos = None
 		self.focused = False
-		self.playing = False
 		self.keys_active = set()
 		self.keyboard = Window.request_keyboard(self.on_kb_close, self, 'text')
 		self.keyboard.bind(on_key_down=self.key_down)
 		self.keyboard.bind(on_key_up=self.key_up)
 
+		global GAMECANVAS_OBJ
+		GAMECANVAS_OBJ = self
+		Clock.schedule_interval(self.tick, GAME_FPS)
+
+	def initGame(self):
 		# init objs
-		global PLAYER_OBJ
+		global GAME_OBJS, PLAYER_OBJ, NEW_GAME
+		GAME_OBJS = []
 		PLAYER_OBJ = PlayerTank(pos=(dp(GAME_WIDTH/2), dp(GAME_HEIGHT/2)))
 		GAME_OBJS.append(PLAYER_OBJ)
 
-		for i in range(random.randint(10, 30)):
+		for i in range(random.randint(10, 25)):
 			GAME_OBJS.append(EnemyTank())
 		
-		Clock.schedule_interval(self.tick, GAME_FPS)
-	
+		NEW_GAME = False
+
 	def on_touch_down(self, touch):
 		global TOUCH_ACTIVE
 		self.focused = True
@@ -358,14 +401,18 @@ class GameCanvas(Widget):
 		code, word = keycode
 		self.keys_active.remove(word)
 		KEYS_ACTIVE.remove(word)
-		if word == 'p': self.playing = not self.playing
+		if word == 'p':
+			global GAME_PLAYING
+			GAME_PLAYING = not GAME_PLAYING
 
 	def tick(self, dt):
-		if not self.playing:
+		global GAME_PLAYING, NEW_GAME
+		if NEW_GAME: self.initGame()
+		if not GAME_PLAYING:
 			self.canvas.clear() # Clear
 			self.canvas.add(texLabel("Press [P] to Play", 100, (0,0), CLR_RED))
 			return
-		print('Tick', dt, len(GAME_OBJS))
+		#print('Tick', dt, len(GAME_OBJS))
 		
 		# update
 		for obj in GAME_OBJS:
@@ -376,14 +423,11 @@ class GameCanvas(Widget):
 		for obj in GAME_OBJS:
 			obj.render(self.canvas)
 
-class MainMenu(Screen):
-	pass
-class GameScreen(Screen):
-	pass
-class HelpScreen(Screen):
-	pass
-class ScreenMgr(ScreenManager):
-	pass
+class MainMenu(Screen): pass
+class GameScreen(Screen): pass
+class HelpScreen(Screen): pass
+class GameOverScreen(Screen): pass
+class ScreenMgr(ScreenManager): pass
 layouts = Builder.load_file('layouts.kv')
 class GameApp(App):
 	title = 'Tanks! | Ragul Balaji 2020 | Digital World 10.009'
