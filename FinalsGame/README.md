@@ -1,5 +1,6 @@
 # Tanks - a game for the 10.009 Digital World course 
 V S Ragul Balaji 2020 &copy; All Rights Reserved
+
 ![tanks](./assets/readme/tanks.gif)
 
 ## Player Objective
@@ -17,6 +18,8 @@ Watch [Tanks Gameplay with Intro Trailer - Youtube](https://www.youtube.com/watc
 
 ## Game Structure
 ![Game Filesystem](./assets/readme/gamefiles.png)
+
+![Game Objects](./assets/readme/gameobjs.png)
 
 ## Annotated Code
 
